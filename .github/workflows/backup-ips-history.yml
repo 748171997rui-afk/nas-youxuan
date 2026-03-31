@@ -1,0 +1,48 @@
+# 工作流名称
+name: Backup ips.txt History
+
+# 触发条件：
+# 1. 当 main 分支有 push 操作（且包含 ips.txt 文件变更）
+# 2. 可手动触发（workflow_dispatch）
+on:
+  push:
+    branches: [ main ]
+    paths: [ 'ips.txt' ] # 仅当 ips.txt 变更时触发
+  workflow_dispatch: # 手动触发开关
+
+# 工作流任务
+jobs:
+  backup-ips:
+    runs-on: ubuntu-latest # 使用 Ubuntu 虚拟机运行
+    steps:
+      # 步骤1：拉取仓库代码到 Runner
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # 拉取完整历史（否则无法获取文件历史）
+
+      # 步骤2：配置 Git 身份（用于提交备份文件）
+      - name: Configure Git
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+
+      # 步骤3：备份 ips.txt 到 history 目录（按日期命名）
+      - name: Backup ips.txt with timestamp
+        run: |
+          # 创建 history 目录（不存在则创建）
+          mkdir -p ips-history
+          # 获取当前时间戳（格式：YYYY-MM-DD-HH-MM-SS，避免重名）
+          TIMESTAMP=$(date +"%Y-%m-%d-%H-%M-%S")
+          # 复制最新的 ips.txt 到历史目录，按时间戳命名
+          cp ips.txt ips-history/ips-${TIMESTAMP}.txt
+          # 检查是否有变更（避免空提交）
+          if [ -n "$(git status --porcelain)" ]; then
+            # 提交备份文件
+            git add ips-history/
+            git commit -m "Backup ips.txt at ${TIMESTAMP}"
+            # 推送到仓库
+            git push
+          else
+            echo "No changes to commit (ips.txt not modified)"
+          fi
